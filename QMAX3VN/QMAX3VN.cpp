@@ -283,18 +283,25 @@ public:
     public:
         int x, y, c;
         node *l, *r;
-        node(int data = 0)
+        /*node(int data)
             : x(data)
             , c(0), l(0), r(0)
         {
             y = ((rand() << 15) + rand()) % INF;
+        }*/
+        node(int ord, int data)
+            : x(data)
+            , c(0), l(0), r(0)
+        {
+            //y = ((rand() << 15) + rand()) % INF;
+            y = ord;
         }
     };
     node *root, *null;
 public:
     CTreap(...)
     {
-        null = new node();
+        null = new node(0, 0);
         null->l = null->r = null;
         null->y = INF;
         root = null;
@@ -323,13 +330,21 @@ public:
         update(q);
         p = q;
     }
-    void ins(node *&p, int x)
+    void ins(node *&p, int x, int ord)
     {
-        if(p == null) { p = new node(x); p->l = p->r = null; p->c = 1; } else
-            if(x<p->x) {
-                ins(p->l, x); if(p->l->y<p->y) lr(p);
+        if(p == null) {
+            p = new node(x, ord);
+            p->l = p->r = null;
+            p->c = 1;
+        } else
+            if(x < p->x) {
+                ins(p->l, x, ord);
+                if(p->l->y < p->y)
+                    lr(p);
             } else {
-                ins(p->r, x); if(p->r->y<p->y) rr(p);
+                ins(p->r, x, ord);
+                if(p->r->y < p->y)
+                    rr(p);
             }
         update(p);
     }
@@ -381,9 +396,9 @@ public:
                 return rfs(p->r, k - p->l->c - 1);
     }
 
-    void ins(int x)
+    void ins(int x, int ord)
     {
-        ins(root, x);
+        ins(root, x, ord);
     }
     void del(int x)
     {
@@ -543,7 +558,7 @@ int main()
         fstr >> q >> x >> y;
         if(*q == 'A') {
             muster.insert(x, y);
-            treap.ins(x);
+            treap.ins(x, y);
         } else if(*q == 'Q') {
             int maxh = muster.height(x, y);
             fsta >> answer;
