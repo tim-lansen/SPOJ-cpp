@@ -15,7 +15,7 @@
 static int TotalEvents;
 
 #include <cstdio>
-#include <memory>
+#include <memory.h>
 #include <vector>
 #include <fstream>
 #include <iostream>
