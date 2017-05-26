@@ -4,9 +4,12 @@
 // This problem's URL:
 // http://www.spoj.com/problems/QMAX3VN/
 //
-// Approach: Every new element inserted as a node
+// Approach #1: update linear array of heights on every appear event, scan range linearly for maximum
+// Approach #2: the same as above, but using vector to store data
+// Approach #3: use modified treap structure: the order of every soldier will be a key, and the soldier's height will be a priority
+//              the goal is to create a method to insert new node with minimal treap update (no need to increment every left-hand-node's order)
 
-#define DEVELOP
+//#define DEVELOP
 
 #define MAX_EVENTS 100001
 static int TotalEvents;
@@ -162,369 +165,223 @@ public:
     }
 };
 
-#define oo 0x3c3c3c3c
-
-class CMusterTree1
-{
-public:
-    struct Soldier
-    {
-        int Max, Size, Height, Left, Right;
-    };
-    
-private:
-    static Soldier *soldiers;
-    static int peak;
-    struct node
-    {
-        int ll, rr, id;
-        node(int L, int X)
-        {
-            ll = L, id = X;
-            rr = ll + CMusterTree1::soldiers[id].Size - 1;
-        }
-        node left()
-        {
-            return node(ll, CMusterTree1::soldiers[id].Left);
-        }
-        node right()
-        {
-            return node(ll + CMusterTree1::soldiers[CMusterTree1::soldiers[id].Left].Size, CMusterTree1::soldiers[id].Right);
-        }
-
-        void insert(int Value, int u)
-        {
-            if(ll > u || u > rr)
-                return;
-            if(ll == rr) {
-                CMusterTree1::soldiers[id].Left = CMusterTree1::create(Value);
-                CMusterTree1::soldiers[id].Right = CMusterTree1::create(CMusterTree1::soldiers[id].Max);
-                CMusterTree1::update(id);
-                return;
-            }
-            left().insert(Value, u);
-            right().insert(Value, u);
-            CMusterTree1::update(id);
-        }
-
-        int max_range(int L, int R)
-        {
-            if(L>rr || ll>R || L>R)
-                return -oo;
-            if(L <= ll && rr <= R)
-                return CMusterTree1::soldiers[id].Max;
-            int Max1 = left().max_range(L, R);
-            int Max2 = right().max_range(L, R);
-            return max(Max1, Max2);
-        }
-    };
-
-    static void update(int id)
-    {
-        int ll = soldiers[id].Left, rr = soldiers[id].Right;
-        soldiers[id].Max = max(soldiers[ll].Max, soldiers[rr].Max);
-        soldiers[id].Size = soldiers[ll].Size + soldiers[rr].Size;
-        soldiers[id].Height = max(soldiers[ll].Height, soldiers[rr].Height) + 1;
-    }
-
-    static int create(int Value)
-    {
-        int id = ++peak;
-        soldiers[id].Max = Value;
-        soldiers[id].Size = 1;
-        return id;
-    }
-
-
-public:
-    CMusterTree1(int total_events)
-    {
-        int ss = 1 + 4 * (total_events + 1);
-        soldiers = new Soldier[ss];
-        memset(soldiers, 0, ss * sizeof(Soldier));
-        create(-oo);
-    }
-    ~CMusterTree1()
-    {
-        delete[] soldiers;
-    }
-
-    static void dump()
-    {
-        for(int i = 1; i < peak; ++i) {
-            Soldier *s = &soldiers[i];
-            printf("id:%d M:%d S:%d H:%d L:%d R:%d\n", i, s->Max, s->Size, s->Height, s->Left, s->Right);
-        }
-        printf("\n");
-    }
-
-    void insert(int height, int position)
-    {
-        node(1, 1).insert(height, position);
-    }
-
-    int height(int a, int b)
-    {
-        node n = node(1, 1);
-        int h = n.max_range(a, b);
-        return h;
-    }
-};
-CMusterTree1::Soldier * CMusterTree1::soldiers = 0;
-int CMusterTree1::peak = 0;
-
-const int INF = 200000000;
-
 class CTreap
 {
-public:
+private:
     class node
     {
     public:
-        int x, y, c;
+        int height, order;  // Original height, relative order
+        int abs_order;
         node *l, *r;
-        /*node(int data)
-            : x(data)
-            , c(0), l(0), r(0)
-        {
-            y = ((rand() << 15) + rand()) % INF;
-        }*/
-        node(int ord, int data)
-            : x(data)
-            , c(0), l(0), r(0)
-        {
-            //y = ((rand() << 15) + rand()) % INF;
-            y = ord;
-        }
     };
-    node *root, *null;
+
+    node *root;
+    int peak;
+    node * pool;
+
+    void split(node *n, node *&l, node *&r, int order)
+    {
+        if(!n)
+            l = r = NULL;
+        else if(order > n->order) {
+            split(n->l, l, n->l, order);
+            r = n;
+        } else {
+            split(n->r, n->r, r, order);
+            l = n;
+        }
+    }
+
+    void insert(node *&cn, node *new_node)
+    {
+        if(!cn)
+            cn = new_node;
+        else if(new_node->height >= cn->height) {
+            split(cn, new_node->l, new_node->r, new_node->order);
+            cn = new_node;
+        } else {
+            if(new_node->order < cn->order)
+                insert(cn->r, new_node);
+            else
+                insert(cn->l, new_node);
+        }
+    }
+
+
+    int m_new_node_order;
+
+    void splitx(node *n, node *&l, node *&r, int offset)
+    {
+        if(!n) {
+            l = r = NULL;
+            return;
+        }
+        int order = offset + n->order;
+        n->abs_order = order;
+        if(m_new_node_order > order) {
+            splitx(n->l, l, n->l, order);
+            r = n;
+            return;
+        }
+        splitx(n->r, n->r, r, offset);
+        l = n;
+    }
+
+    void insertx(node *&cn, node *new_node)
+    {
+        if(!cn) {
+            cn = new_node;
+            return;
+        }
+        if(new_node->height >= cn->height) {
+            int offset = m_new_node_order - new_node->order;
+            splitx(cn, new_node->l, new_node->r, offset);
+            cn = new_node;
+            offset += new_node->order;
+            for(node *rn = new_node->l; rn; rn = rn->r) {
+                rn->order = rn->abs_order + 1 - m_new_node_order;
+            }
+            /*if(new_node->l) {
+                new_node->l->order = new_node->l->abs_order + 1 - m_new_node_order;
+                
+            }*/
+            return;
+        }
+        if(new_node->order <= cn->order) {
+            // Go right, increment passed node's order
+            cn->order++;
+            insertx(cn->r, new_node);
+            return;
+        }
+        // Go left, decrease new node's order
+        new_node->order -= cn->order;
+        insertx(cn->l, new_node);
+    }
+
+    int maxh(node *n, int offset, int a, int b)
+    {
+        int order = offset + n->order;
+        if(order >= a && order <= b)
+            return n->height;
+        if(a > order) {
+            // Go left
+            return maxh(n->l, order, a, b);
+        }
+        return maxh(n->r, offset, a, b);
+    }
+#ifdef DEVELOP
+    void dump(node *n, int offset) {
+        if(n->l)
+            dump(n->l, offset + n->order);
+        printf("O:%d (%d)  H:%d  l:%d r:%d %s\n",
+            offset + n->order, n->order, n->height,
+            n->l? n->l->order + offset + n->order : 0,
+            n->r? n->r->order + offset : 0,
+            n == root? "(root)" : ""
+        );
+        if(n->r)
+            dump(n->r, offset);
+    }
+    void dump2(node *n, int offset, int level, vector<vector<int>> &store)
+    {
+        if(store.size() <= level)
+            store.push_back({});
+        if(n->l)
+            dump2(n->l, offset + n->order, level + 1, store);
+        store[level].push_back(offset + n->order);
+        if(n->r)
+            dump2(n->r, offset, level + 1, store);
+    }
+#endif
 public:
     CTreap(...)
     {
-        null = new node(0, 0);
-        null->l = null->r = null;
-        null->y = INF;
-        root = null;
+        pool = (node*)malloc(MAX_EVENTS * sizeof(node));
+        memset(pool, 0, MAX_EVENTS * sizeof(node));
+        root = 0;
+        peak = 0;
     }
-    void update(node*&p)
+    void insert(int h, int o)
     {
-        if(p != null) {
-            p->c = p->l->c + p->r->c + 1;
-        }
-    }
-    void lr(node *&p)
-    {
-        node *q = p->l;
-        p->l = q->r;
-        q->r = p;
-        update(p);
-        update(q);
-        p = q;
-    }
-    void rr(node *&p)
-    {
-        node *q = p->r;
-        p->r = q->l;
-        q->l = p;
-        update(p);
-        update(q);
-        p = q;
-    }
-    void ins(node *&p, int x, int ord)
-    {
-        if(p == null) {
-            p = new node(x, ord);
-            p->l = p->r = null;
-            p->c = 1;
-        } else
-            if(x < p->x) {
-                ins(p->l, x, ord);
-                if(p->l->y < p->y)
-                    lr(p);
-            } else {
-                ins(p->r, x, ord);
-                if(p->r->y < p->y)
-                    rr(p);
-            }
-        update(p);
-    }
-    void del(node *&p, int x)
-    {
-        if(p == null) return;
-        if(p->x == x)
-            del(p);
-        else
-            if(x<p->x)
-                del(p->l, x);
-            else
-                del(p->r, x);
-        if(p != null) update(p);
-    }
-    void del(node *&p)
-    {
-        if(p->l == null&&p->r == null) {
-            delete p;
-            p = null;
+        node *new_node = &pool[peak];
+        new_node->order = o;
+        new_node->height = h;
+        //new_node->index = peak;
+        if(!peak) {
+            root = pool;
+            peak = 1;
             return;
         }
-        if(p->l->y<p->r->y) {
-            lr(p);
-            del(p->r);
-        } else {
-            rr(p);
-            del(p->l);
-        }
-        update(p);
+        m_new_node_order = o;
+        insertx(root, new_node);
+        peak++;
     }
-    bool find(node *&p, int x)
-    {
-        if(p == null) return false;
-        if(x == p->x) return true;
-        if(x<p->x)
-            return find(p->l, x);
-        else
-            return find(p->r, x);
-    }
-    int rfs(node *&p, int k)
-    {
-        if(k <= p->l->c)
-            return rfs(p->l, k);
-        else
-            if(k == p->l->c + 1)
-                return p->x;
-            else
-                return rfs(p->r, k - p->l->c - 1);
-    }
-
-    void ins(int x, int ord)
-    {
-        ins(root, x, ord);
-    }
-    void del(int x)
-    {
-        del(root, x);
-    }
-    bool find(int x)
-    {
-        return find(root, x);
-    }
-    int rfs(int k)
-    {
-        if(k >= 1 && k <= root->c)
-            return rfs(root, k);
-        else
-            return -1;
-    }
-};
-
-class CMusterKienCoi1997
-{
-
-#define N 400005
-
-    static int Max[N], Size[N], Height[N], Left[N], Right[N], Peak;
-
-    static void update(int id)
-    {
-        int ll = Left[id], rr = Right[id];
-        Max[id] = max(Max[ll], Max[rr]);
-        Size[id] = Size[ll] + Size[rr];
-        Height[id] = max(Height[ll], Height[rr]) + 1;
-    }
-
-    static int create(int Value)
-    {
-        int id = ++Peak;
-        Max[id] = Value;
-        Size[id] = 1;
-        return id;
-    }
-
-    struct node
-    {
-        int ll, rr, id;
-        node(int L, int X) {
-            ll = L, id = X;
-            rr = ll + CMusterKienCoi1997::Size[id] - 1;
-        }
-        node left() {
-            return node(ll, CMusterKienCoi1997::Left[id]);
-        }
-        node right() {
-            return node(ll + CMusterKienCoi1997::Size[Left[id]], CMusterKienCoi1997::Right[id]);
-        }
-
-        void insert(int Value, int u)
-        {
-            if(ll > u || u > rr)
-                return;
-            if(ll == rr) {
-                CMusterKienCoi1997::Left[id] = CMusterKienCoi1997::create(Value);
-                CMusterKienCoi1997::Right[id] = CMusterKienCoi1997::create(CMusterKienCoi1997::Max[id]);
-                update(id);
-                return;
-            }
-            left().insert(Value, u);
-            right().insert(Value, u);
-            CMusterKienCoi1997::update(id);
-        }
-
-        int max_range(int L, int R)
-        {
-            if(L>rr || ll>R || L>R)
-                return -oo;
-            if(L <= ll && rr <= R)
-                return CMusterKienCoi1997::Max[id];
-            int Max1 = left().max_range(L, R);
-            int Max2 = right().max_range(L, R);
-            return max(Max1, Max2);
-        }
-    };
-public:
-    CMusterKienCoi1997(...)
-    {
-        memset(Max, 0, sizeof(Max));
-        memset(Size, 0, sizeof(Size));
-        memset(Height, 0, sizeof(Height));
-        memset(Left, 0, sizeof(Left));
-        memset(Right, 0, sizeof(Right));
-        create(-oo);
-    }
-    /*ostream& operator << (ostream& cout, node a)
-    {
-        if(a.ll == a.rr) return cout << Max[a.id];
-        return cout << "(" << a.left() << " " << a.right() << ")";
-        //return cout << a.left() << " " << a.right();
-    }*/
-
-    void dump()
-    {
-        for(int i = 1; i < Peak; ++i) {
-            printf("id:%d M:%d S:%d H:%d L:%d R:%d\n", i, Max[i], Size[i], Height[i], Left[i], Right[i]);
-        }
-        printf("\n");
-    }
-
-    void insert(int height, int position)
-    {
-        node(1, 1).insert(height, position);
-    }
-
     int height(int a, int b)
     {
-        node n = node(1, 1);
-        int h = n.max_range(a, b);
-        return h;
+        if(a < b)
+            return maxh(root, 0, a, b);
+        return maxh(root, 0, b, a);
     }
+#ifdef DEVELOP
+    void dump() {
+        dump(root, 0);
+        printf("=================\n");
+    }
+    void dump2()
+    {
+        vector<vector<int>> dr;
+        dump2(root, 0, 0, dr);
+        for(auto x : dr) {
+            int last_offset = 0;
+            for(auto a = x.rbegin(); a != x.rend(); a++) {
+                for(; last_offset < *a; ++last_offset)
+                    printf(" ");
+                ++last_offset;
+                printf("*");
+            }
+            printf("\n");
+        }
+        printf("=================\n");
+    }
+#endif
 };
-int CMusterKienCoi1997::Max[N], CMusterKienCoi1997::Size[N], CMusterKienCoi1997::Height[N];
-int CMusterKienCoi1997::Left[N], CMusterKienCoi1997::Right[N], CMusterKienCoi1997::Peak = 0;
 
 
-//typedef CMusterLinear CMuster;
-//typedef CMusterVector CMuster;
-typedef CMusterTree1 CMuster;
-//typedef CMusterKienCoi1997 CMuster;
+#ifdef DEVELOP
+
+void do_test()
+{
+    char strline[16];
+    int size = 0;
+    const int maxH = 256;
+    CMusterVector sampler;
+    CTreap treap;
+    for(int i = 0; i < 100; ++i) {
+        /*if(size > 5 && rand() > (RAND_MAX >> 3)) {
+            // Generate request
+            int a = 1 + (rand() % size), b = 1 + (rand() % size);
+            int m1 = sampler.height(a, b);
+            int m2 = treap.max_height(a, b);
+            printf("Q %d %d  %d:%d\n", a, b, m1, m2);
+            if(m1 != m2) {
+                printf("Error!\n");
+            }
+            //sprintf(strline, "Q %d %d \n",1 + (rand() % size), 1 + (rand() % size));
+        } else*/ {
+            // Generate append
+            size++;
+            int h = 1 + (rand() % maxH), o = 1 + (rand() % size);
+            sampler.insert(h, o);
+            treap.insert(h, o);
+            printf("O: %d  H: %d\n", o, h);
+            treap.dump2();
+            //sprintf(strline, "A %d %d\n", 1 + (rand() % maxH), 1 + (rand() % size));
+        }
+    }
+}
+
+#endif
 
 int main()
 {
@@ -532,7 +389,7 @@ int main()
     char q[8];
 #ifndef DEVELOP
     scanf("%d", &e);
-    CMuster muster(e);
+    CTreap muster(e);
     for(n = 0; n < e; ++n) {
         scanf("%s %d %d", &q, &x, &y);
         if(*q == 'A') {
@@ -545,37 +402,35 @@ int main()
         }
     }
 #else
-    //strstream str;
-    ifstream fstr("C:\\git\\edu.cpp\\SPOJ-cpp\\Debug\\QMAX3VN.tc1.txt");
-    ifstream fsta("C:\\git\\edu.cpp\\SPOJ-cpp\\Debug\\QMAX3VN.tc1a.txt");
+    do_test();
+    ifstream fstr("C:\\git\\edu.cpp\\SPOJ-cpp\\Debug\\QMAX3VN.tc2.txt");
+    ifstream fsta("C:\\git\\edu.cpp\\SPOJ-cpp\\Debug\\QMAX3VN.tc2a.txt");
     if(fstr.bad() || fsta.bad())
         return -1;
     fstr >> e;
     int answer;
-    CMuster muster(e);
     CTreap treap(e);
     for(n = 0; n < e; ++n) {
         fstr >> q >> x >> y;
         if(*q == 'A') {
-            muster.insert(x, y);
-            treap.ins(x, y);
+            printf("insert O:%d H:%d\n", y, x);
+            treap.insert(x, y);
+            treap.dump();
         } else if(*q == 'Q') {
-            int maxh = muster.height(x, y);
+            int maxh = treap.height(x, y);
             fsta >> answer;
             
             if(maxh != answer) {
                 printf("Wrong answer! Q %d %d = %d, must be %d\n", x, y, maxh, answer);
-                muster.dump();
             } else {
                 printf("%d\n", maxh);
             }
         }
-        muster.dump();
-        //treap.dump();
+        //muster.dump();
+        
     }
     fstr.close();
     fsta.close();
-
 #endif
     return 0;
 }
