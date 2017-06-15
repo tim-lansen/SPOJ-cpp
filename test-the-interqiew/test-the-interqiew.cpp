@@ -1,5 +1,10 @@
 #include <iostream>
 #include <vector>
+#include <set>
+#include <algorithm>
+#include <iterator>
+#include <string>
+using namespace std;
 
 class A
 {
@@ -36,6 +41,7 @@ public:
 
 int main()
 {
+
     const A a(1);
     const B b(3);
     const A *x[2] = {&a, &b};
